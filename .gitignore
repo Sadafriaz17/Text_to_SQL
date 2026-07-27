@@ -1,0 +1,16 @@
+# Virtual environment
+venv/
+
+# Secrets
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+
+# VS Code settings (optional, keeps personal editor settings out of git)
+.vscode/
+
+# OS clutter
+.DS_Store
+Thumbs.db
