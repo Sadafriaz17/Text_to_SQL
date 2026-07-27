@@ -1,0 +1,38 @@
+# tools.yaml
+# Configuration for MCP Toolbox for Databases, connecting to the
+# Chinook database hosted in Microsoft SQL Server (SSMS).
+#
+# IMPORTANT: never commit real username/password values here.
+# The ${VAR_NAME} syntax below pulls values from environment variables
+# instead, so this file is safe to push to GitHub as-is.
+
+sources:
+  chinook-db:
+    type: mssql
+    host: ${DB_HOST}       # usually "localhost" or "127.0.0.1" if SSMS is on your own PC
+    port: ${DB_PORT}       # default SQL Server port is 1433
+    database: ${DB_NAME}   # e.g. "Chinook" - must match the exact database name in SSMS
+    user: ${DB_USER}       # your SQL Server login username
+    password: ${DB_PASSWORD}
+
+tools:
+  list_tables:
+    type: mssql-list-tables
+    source: chinook-db
+    description: >
+      Lists all tables in the Chinook database along with their columns,
+      data types, and relationships. Use this first to understand the schema
+      before writing any SQL query.
+
+  execute_sql:
+    type: mssql-execute-sql
+    source: chinook-db
+    description: >
+      Executes a single SQL (T-SQL) statement against the Chinook database
+      and returns the results. Only use SELECT statements generated for
+      answering user questions - do not run statements that modify data.
+
+toolsets:
+  chinook_tools:
+    - list_tables
+    - execute_sql
