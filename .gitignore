@@ -13,4 +13,5 @@ __pycache__/
 
 # OS clutter
 .DS_Store
-Thumbs.db
+Thumbs.dbtoolbox_setup/toolbox.exe
+toolbox_setup/toolbox.exe

@@ -3,8 +3,8 @@
 # Chinook database hosted in Microsoft SQL Server (SSMS).
 #
 # IMPORTANT: never commit real username/password values here.
-# The ${VAR_NAME} syntax below pulls values from environment variables
-# instead, so this file is safe to push to GitHub as-is.
+# The environment-variable placeholders below pull values from your .env
+# file / environment, so this file is safe to push to GitHub as-is.
 
 sources:
   chinook-db:
