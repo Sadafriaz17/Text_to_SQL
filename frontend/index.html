@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chinook SQL — Ask the Database</title>
+  <meta name="description" content="Natural-language queries over the Chinook music database powered by an LLM and MCP Toolbox." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ─── Design Tokens ─────────────────────────────────────────────── */
+    :root {
+      --bg-base:       #09090f;
+      --bg-surface:    #111120;
+      --bg-card:       #161628;
+      --bg-card-hover: #1c1c38;
+      --border:        rgba(108, 99, 255, 0.18);
+      --border-bright: rgba(108, 99, 255, 0.45);
+
+      --accent:        #6c63ff;
+      --accent-glow:   rgba(108, 99, 255, 0.35);
+      --accent-light:  #a08bff;
+      --electric:      #00d9ff;
+      --electric-glow: rgba(0, 217, 255, 0.25);
+      --success:       #00e5a0;
+      --danger:        #ff4d6d;
+      --warning:       #ffd166;
+
+      --text-primary:   #e8e8ff;
+      --text-secondary: #8884a8;
+      --text-muted:     #4e4b6a;
+
+      --radius-sm:  8px;
+      --radius-md:  14px;
+      --radius-lg:  20px;
+      --radius-xl:  28px;
+
+      --shadow-glow: 0 0 40px rgba(108, 99, 255, 0.18), 0 8px 32px rgba(0,0,0,0.6);
+      --shadow-card: 0 4px 24px rgba(0,0,0,0.5);
+    }
+
+    /* ─── Reset & Base ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ─── Animated background mesh ─────────────────────────────────── */
+    .bg-mesh {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .bg-mesh::before {
+      content: '';
+      position: absolute;
+      width: 800px; height: 800px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(108,99,255,0.12) 0%, transparent 70%);
+      top: -200px; left: -200px;
+      animation: floatA 18s ease-in-out infinite alternate;
+    }
+    .bg-mesh::after {
+      content: '';
+      position: absolute;
+      width: 600px; height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,217,255,0.08) 0%, transparent 70%);
+      bottom: -100px; right: -100px;
+      animation: floatB 22s ease-in-out infinite alternate;
+    }
+    @keyframes floatA {
+      from { transform: translate(0,0) scale(1); }
+      to   { transform: translate(120px, 80px) scale(1.2); }
+    }
+    @keyframes floatB {
+      from { transform: translate(0,0) scale(1); }
+      to   { transform: translate(-80px, -60px) scale(1.15); }
+    }
+
+    /* ─── Layout ────────────────────────────────────────────────────── */
+    .app {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* ─── Header ────────────────────────────────────────────────────── */
+    header {
+      padding: 20px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      background: rgba(9,9,15,0.7);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-icon {
+      width: 38px; height: 38px;
+      background: linear-gradient(135deg, var(--accent), var(--electric));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+    .logo-text {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--accent-light), var(--electric));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      transition: all 0.3s;
+      cursor: default;
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: all 0.3s;
+    }
+    .status-badge.connected { border-color: rgba(0,229,160,0.3); color: var(--success); }
+    .status-badge.connected .status-dot {
+      background: var(--success);
+      box-shadow: 0 0 8px var(--success);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    .status-badge.error-state { border-color: rgba(255,77,109,0.3); color: var(--danger); }
+    .status-badge.error-state .status-dot { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.5; }
+    }
+
+    /* ─── Hero ──────────────────────────────────────────────────────── */
+    .hero {
+      padding: 72px 40px 48px;
+      text-align: center;
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    .hero-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 14px;
+      border-radius: 999px;
+      background: rgba(108,99,255,0.12);
+      border: 1px solid rgba(108,99,255,0.3);
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--accent-light);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      margin-bottom: 16px;
+      background: linear-gradient(160deg, #ffffff 30%, var(--accent-light) 70%, var(--electric) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      font-size: 1.05rem;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      max-width: 540px;
+      margin: 0 auto 40px;
+    }
+
+    /* ─── Query Input ───────────────────────────────────────────────── */
+    .query-bar {
+      position: relative;
+      max-width: 720px;
+      margin: 0 auto 20px;
+    }
+    .query-bar-inner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-card);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 6px 8px 6px 20px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .query-bar-inner:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px var(--accent-glow), var(--shadow-glow);
+    }
+    #question-input {
+      flex: 1;
+      background: none;
+      border: none;
+      outline: none;
+      font-family: 'Inter', sans-serif;
+      font-size: 1rem;
+      color: var(--text-primary);
+      padding: 10px 0;
+      caret-color: var(--accent);
+    }
+    #question-input::placeholder { color: var(--text-muted); }
+
+    #submit-btn {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 11px 24px;
+      border-radius: var(--radius-lg);
+      background: linear-gradient(135deg, var(--accent), #9061ff);
+      border: none;
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.92rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+      box-shadow: 0 4px 20px var(--accent-glow);
+    }
+    #submit-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 28px rgba(108,99,255,0.5);
+    }
+    #submit-btn:active:not(:disabled) { transform: translateY(0); }
+    #submit-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .btn-icon { font-size: 1rem; transition: transform 0.2s; }
+    #submit-btn:hover:not(:disabled) .btn-icon { transform: translateX(3px); }
+
+    /* Example chips */
+    .example-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    .chip {
+      padding: 5px 14px;
+      border-radius: 999px;
+      background: rgba(108,99,255,0.08);
+      border: 1px solid var(--border);
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .chip:hover {
+      background: rgba(108,99,255,0.18);
+      border-color: var(--border-bright);
+      color: var(--text-primary);
+    }
+
+    /* ─── Main Content ──────────────────────────────────────────────── */
+    main {
+      flex: 1;
+      max-width: 900px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 0 40px 80px;
+    }
+
+    /* ─── Loading ───────────────────────────────────────────────────── */
+    .loading-card {
+      display: none;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 28px 32px;
+      margin-bottom: 24px;
+      align-items: center;
+      gap: 20px;
+      animation: fadeSlideIn 0.3s ease;
+    }
+    .loading-card.visible { display: flex; }
+
+    .loading-dots {
+      display: flex;
+      gap: 6px;
+    }
+    .loading-dots span {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: bounce-dot 1.2s ease-in-out infinite;
+    }
+    .loading-dots span:nth-child(2) { animation-delay: 0.15s; background: var(--electric); }
+    .loading-dots span:nth-child(3) { animation-delay: 0.3s;  background: var(--accent-light); }
+    @keyframes bounce-dot {
+      0%, 80%, 100% { transform: translateY(0); opacity: 0.5; }
+      40%            { transform: translateY(-10px); opacity: 1; }
+    }
+    .loading-text {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+    }
+    .loading-text strong { color: var(--text-primary); }
+
+    /* ─── Result Cards ──────────────────────────────────────────────── */
+    #results-container { display: flex; flex-direction: column; gap: 28px; }
+
+    .result-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      animation: fadeSlideIn 0.4s ease;
+      box-shadow: var(--shadow-card);
+      transition: border-color 0.2s;
+    }
+    .result-card:hover { border-color: var(--border-bright); }
+
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Card header */
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .question-display {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .q-icon {
+      flex-shrink: 0;
+      width: 26px; height: 26px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), var(--electric));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px;
+      margin-top: 1px;
+    }
+    .card-timestamp {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      padding-top: 4px;
+    }
+
+    /* Sections inside card */
+    .card-section {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-section:last-child { border-bottom: none; }
+
+    .section-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+    .section-label-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+    }
+
+    /* Tables chips */
+    .tables-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .table-chip {
+      padding: 4px 12px;
+      border-radius: var(--radius-sm);
+      background: rgba(108,99,255,0.12);
+      border: 1px solid rgba(108,99,255,0.25);
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--accent-light);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* SQL block */
+    .sql-block {
+      position: relative;
+      background: #0d0d1a;
+      border: 1px solid rgba(0,217,255,0.12);
+      border-radius: var(--radius-md);
+      padding: 16px 48px 16px 16px;
+      overflow-x: auto;
+    }
+    .sql-block pre {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      line-height: 1.7;
+      color: #c8c8ff;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .copy-btn {
+      position: absolute;
+      top: 10px; right: 10px;
+      background: rgba(108,99,255,0.15);
+      border: 1px solid rgba(108,99,255,0.2);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Inter', sans-serif;
+    }
+    .copy-btn:hover { background: rgba(108,99,255,0.3); color: var(--text-primary); }
+    .copy-btn.copied { color: var(--success); border-color: rgba(0,229,160,0.3); }
+
+    /* SQL syntax highlighting (via JS class injection) */
+    .sql-kw   { color: #a08bff; font-weight: 600; }
+    .sql-fn   { color: #00d9ff; }
+    .sql-str  { color: #ffd166; }
+    .sql-num  { color: #ff9f7f; }
+    .sql-op   { color: #ff79c6; }
+
+    /* Results table */
+    .results-table-wrap {
+      overflow-x: auto;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+    }
+    .results-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    .results-table th {
+      background: rgba(108,99,255,0.1);
+      color: var(--text-secondary);
+      font-weight: 600;
+      font-size: 0.72rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .results-table td {
+      padding: 10px 14px;
+      color: var(--text-primary);
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+    }
+    .results-table tr:last-child td { border-bottom: none; }
+    .results-table tbody tr { transition: background 0.15s; }
+    .results-table tbody tr:hover { background: rgba(108,99,255,0.06); }
+
+    /* Row count badge */
+    .row-count {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      padding: 2px 0 0;
+    }
+
+    /* No rows */
+    .no-rows {
+      padding: 28px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.88rem;
+    }
+
+    /* Error card */
+    .error-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 16px 20px;
+      background: rgba(255,77,109,0.06);
+      border: 1px solid rgba(255,77,109,0.2);
+      border-radius: var(--radius-md);
+    }
+    .error-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 2px; }
+    .error-message { font-size: 0.85rem; color: #ff8fa3; line-height: 1.6; }
+
+    /* ─── Empty state ───────────────────────────────────────────────── */
+    .empty-state {
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--text-muted);
+    }
+    .empty-icon {
+      font-size: 3rem;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+    .empty-state h3 { font-size: 1rem; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary); }
+    .empty-state p  { font-size: 0.85rem; }
+
+    /* ─── Footer ────────────────────────────────────────────────────── */
+    footer {
+      padding: 24px 40px;
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+    }
+    footer span { color: var(--accent-light); }
+
+    /* ─── Responsive ────────────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      header { padding: 14px 20px; }
+      .hero   { padding: 48px 20px 32px; }
+      main    { padding: 0 20px 60px; }
+      .card-header, .card-section { padding-left: 16px; padding-right: 16px; }
+      footer  { padding: 20px; }
+    }
+
+    /* ─── Scrollbar ─────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-base); }
+    ::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+  </style>
+</head>
+
+<body>
+  <div class="bg-mesh" aria-hidden="true"></div>
+
+  <div class="app">
+    <!-- Header -->
+    <header>
+      <div class="logo">
+        <div class="logo-icon">🎵</div>
+        <span class="logo-text">Chinook SQL</span>
+      </div>
+      <div class="status-badge" id="status-badge">
+        <div class="status-dot" id="status-dot"></div>
+        <span id="status-text">Checking connection…</span>
+      </div>
+    </header>
+
+    <!-- Hero + input -->
+    <section class="hero" aria-labelledby="hero-heading">
+      <div class="hero-tag">✦ Powered by LLM + MCP Toolbox</div>
+      <h1 id="hero-heading">Ask the Chinook<br />Database Anything</h1>
+      <p>Type a question in plain English. The AI picks the right tables, writes the SQL, and runs it live against the Chinook music database.</p>
+
+      <div class="query-bar" role="search">
+        <div class="query-bar-inner">
+          <input
+            id="question-input"
+            type="text"
+            placeholder="e.g. Which artist has the most albums?"
+            aria-label="Natural-language database question"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button id="submit-btn" aria-label="Run query" onclick="submitQuery()">
+            <span>Ask</span>
+            <span class="btn-icon">→</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="example-chips" role="list" aria-label="Example questions">
+        <button class="chip" role="listitem" onclick="fillExample(this)">Top 5 selling artists</button>
+        <button class="chip" role="listitem" onclick="fillExample(this)">Total revenue by country</button>
+        <button class="chip" role="listitem" onclick="fillExample(this)">All Rock tracks under $1</button>
+        <button class="chip" role="listitem" onclick="fillExample(this)">Customers from Germany</button>
+        <button class="chip" role="listitem" onclick="fillExample(this)">Most popular playlists</button>
+        <button class="chip" role="listitem" onclick="fillExample(this)">Employees and their managers</button>
+      </div>
+    </section>
+
+    <!-- Main results area -->
+    <main>
+      <!-- Loading indicator -->
+      <div class="loading-card" id="loading-card" aria-live="polite" aria-busy="true">
+        <div class="loading-dots" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <div class="loading-text">
+          <strong id="loading-question"></strong>
+          <br />
+          <span>Identifying tables, generating SQL, and querying the database…</span>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div id="results-container" aria-live="polite">
+        <!-- Empty state -->
+        <div class="empty-state" id="empty-state">
+          <div class="empty-icon">🎶</div>
+          <h3>No queries yet</h3>
+          <p>Ask a question above to explore the Chinook music database.</p>
+        </div>
+      </div>
+    </main>
+
+    <footer>
+      Built on <span>MCP Toolbox</span> · <span>Qwen LLM</span> · <span>Chinook DB</span> (SQL Server)
+    </footer>
+  </div>
+
+  <script>
+    // ─────────────────────────────────────────────────────────────────
+    // Config
+    // ─────────────────────────────────────────────────────────────────
+    const API_BASE = 'http://localhost:8000';
+
+    // ─────────────────────────────────────────────────────────────────
+    // Health check on load
+    // ─────────────────────────────────────────────────────────────────
+    async function checkHealth() {
+      const badge = document.getElementById('status-badge');
+      const dot   = document.getElementById('status-dot');
+      const text  = document.getElementById('status-text');
+      try {
+        const res = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(5000) });
+        if (res.ok) {
+          badge.className = 'status-badge connected';
+          text.textContent = 'Database connected';
+        } else {
+          throw new Error();
+        }
+      } catch {
+        badge.className = 'status-badge error-state';
+        text.textContent = 'API server offline';
+      }
+    }
+    checkHealth();
+
+    // ─────────────────────────────────────────────────────────────────
+    // Example chip fill
+    // ─────────────────────────────────────────────────────────────────
+    function fillExample(el) {
+      const input = document.getElementById('question-input');
+      input.value = el.textContent;
+      input.focus();
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Enter key support
+    // ─────────────────────────────────────────────────────────────────
+    document.getElementById('question-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitQuery(); }
+    });
+
+    // ─────────────────────────────────────────────────────────────────
+    // Submit query
+    // ─────────────────────────────────────────────────────────────────
+    async function submitQuery() {
+      const input = document.getElementById('question-input');
+      const btn   = document.getElementById('submit-btn');
+      const question = input.value.trim();
+      if (!question) { input.focus(); return; }
+
+      // Remove empty state
+      document.getElementById('empty-state')?.remove();
+
+      // Show loading
+      const loading = document.getElementById('loading-card');
+      document.getElementById('loading-question').textContent = `"${question}"`;
+      loading.classList.add('visible');
+      btn.disabled = true;
+      input.value = '';
+
+      const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      try {
+        const res  = await fetch(`${API_BASE}/query`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question }),
+        });
+        const data = await res.json();
+        renderResult(data, timestamp);
+      } catch (err) {
+        renderResult({
+          success: false,
+          question,
+          tables: [],
+          sql: '',
+          error: `Could not reach the API server at ${API_BASE}. Make sure uvicorn is running.`,
+        }, timestamp);
+      } finally {
+        loading.classList.remove('visible');
+        btn.disabled = false;
+        input.focus();
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Render a result card
+    // ─────────────────────────────────────────────────────────────────
+    function renderResult(data, timestamp) {
+      const container = document.getElementById('results-container');
+
+      const card = document.createElement('div');
+      card.className = 'result-card';
+
+      // ── Header ──
+      card.innerHTML = `
+        <div class="card-header">
+          <div class="question-display">
+            <div class="q-icon" aria-hidden="true">Q</div>
+            <span>${escapeHtml(data.question)}</span>
+          </div>
+          <div class="card-timestamp">${timestamp}</div>
+        </div>
+      `;
+
+      // ── Relevant tables ──
+      if (data.tables && data.tables.length > 0) {
+        const tablesSection = document.createElement('div');
+        tablesSection.className = 'card-section';
+        tablesSection.innerHTML = `
+          <div class="section-label">
+            <div class="section-label-dot" style="background:#a08bff"></div>
+            Relevant Tables
+          </div>
+          <div class="tables-list">
+            ${data.tables.map(t => `<span class="table-chip">${escapeHtml(t)}</span>`).join('')}
+          </div>
+        `;
+        card.appendChild(tablesSection);
+      }
+
+      // ── Generated SQL ──
+      if (data.sql) {
+        const sqlSection = document.createElement('div');
+        sqlSection.className = 'card-section';
+
+        const highlighted = highlightSQL(data.sql);
+        const uniqueId = 'sql-' + Date.now();
+        sqlSection.innerHTML = `
+          <div class="section-label">
+            <div class="section-label-dot" style="background:#00d9ff"></div>
+            Generated SQL
+          </div>
+          <div class="sql-block">
+            <pre id="${uniqueId}">${highlighted}</pre>
+            <button class="copy-btn" onclick="copySQL('${uniqueId}', this)" aria-label="Copy SQL">Copy</button>
+          </div>
+        `;
+        card.appendChild(sqlSection);
+      }
+
+      // ── Results or Error ──
+      if (!data.success) {
+        const errSection = document.createElement('div');
+        errSection.className = 'card-section';
+        errSection.innerHTML = `
+          <div class="section-label">
+            <div class="section-label-dot" style="background:#ff4d6d"></div>
+            Error
+          </div>
+          <div class="error-card">
+            <span class="error-icon">⚠</span>
+            <div class="error-message">${escapeHtml(data.error || 'Unknown error')}</div>
+          </div>
+        `;
+        card.appendChild(errSection);
+      } else {
+        const rows = data.rows || [];
+        const resultSection = document.createElement('div');
+        resultSection.className = 'card-section';
+
+        if (rows.length === 0) {
+          resultSection.innerHTML = `
+            <div class="section-label">
+              <div class="section-label-dot" style="background:#00e5a0"></div>
+              Results
+            </div>
+            <div class="no-rows">Query ran successfully — no rows returned.</div>
+          `;
+        } else {
+          const columns = getColumns(rows);
+          const rowsHtml = rows.map(row =>
+            `<tr>${columns.map(col => `<td>${escapeHtml(String(row[col] ?? ''))}</td>`).join('')}</tr>`
+          ).join('');
+          resultSection.innerHTML = `
+            <div class="section-label" style="justify-content:space-between">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div class="section-label-dot" style="background:#00e5a0"></div>
+                Results
+              </div>
+              <span class="row-count">📊 ${rows.length} row${rows.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div class="results-table-wrap">
+              <table class="results-table">
+                <thead>
+                  <tr>${columns.map(c => `<th>${escapeHtml(c)}</th>`).join('')}</tr>
+                </thead>
+                <tbody>${rowsHtml}</tbody>
+              </table>
+            </div>
+          `;
+        }
+        card.appendChild(resultSection);
+      }
+
+      // Prepend newest at top
+      container.insertBefore(card, container.firstChild);
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Helpers
+    // ─────────────────────────────────────────────────────────────────
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function getColumns(rows) {
+      if (!rows || rows.length === 0) return [];
+      // Rows may be arrays or objects depending on the Toolbox response
+      const first = rows[0];
+      if (Array.isArray(first)) {
+        return first.map((_, i) => `Col ${i + 1}`);
+      }
+      return Object.keys(first);
+    }
+
+    function highlightSQL(sql) {
+      const escaped = escapeHtml(sql);
+      const keywords = [
+        'SELECT','FROM','WHERE','JOIN','LEFT','RIGHT','INNER','OUTER',
+        'ON','GROUP BY','ORDER BY','HAVING','LIMIT','TOP','DISTINCT',
+        'AS','AND','OR','NOT','IN','IS','NULL','COUNT','SUM','AVG',
+        'MIN','MAX','CASE','WHEN','THEN','ELSE','END','INSERT','INTO',
+        'VALUES','UPDATE','SET','DELETE','CREATE','TABLE','INDEX',
+        'PRIMARY','KEY','REFERENCES','UNION','ALL','EXISTS','BETWEEN',
+        'LIKE','ASC','DESC','BY',
+      ];
+      let result = escaped;
+      // Keywords
+      keywords.forEach(kw => {
+        const re = new RegExp(`\\b(${kw})\\b`, 'gi');
+        result = result.replace(re, '<span class="sql-kw">$1</span>');
+      });
+      // Strings
+      result = result.replace(/(&quot;.*?&quot;|&#39;.*?&#39;)/g, '<span class="sql-str">$1</span>');
+      // Numbers
+      result = result.replace(/\b(\d+(\.\d+)?)\b/g, '<span class="sql-num">$1</span>');
+      return result;
+    }
+
+    async function copySQL(preId, btn) {
+      const pre = document.getElementById(preId);
+      const text = pre ? pre.innerText : '';
+      try {
+        await navigator.clipboard.writeText(text);
+        btn.textContent = '✓ Copied';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+      } catch {
+        btn.textContent = 'Failed';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+      }
+    }
+  </script>
+</body>
+</html>
