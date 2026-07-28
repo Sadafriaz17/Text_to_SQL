@@ -18,24 +18,30 @@ So the "contract" between your code and theirs is simple:
 No database connection happens in this file at all - that's their job.
 """
 
+import os
 import json
 import re
 import requests
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ---------------------------------------------------------------------------
 # 1. Connect to the hosted LLM
 # ---------------------------------------------------------------------------
 #
-# NOTE: Gemini was tried here but the current Google account has a free-tier
-# quota of 0 (RESOURCE_EXHAUSTED / limit: 0), most likely a regional
-# restriction. That's an account/billing issue, not a code issue - see the
-# commented-out Gemini version below to switch back once billing is fixed.
-# For now, reverted to the original working hosted endpoint so the demo
-# isn't blocked.
+# NOTE: This project originally used a hosted internal server
+# (10.41.4.200), which only worked from the NetSol network. Switched to
+# Groq (https://groq.com) instead - it's a public endpoint (works from any
+# network), free tier, no credit card, and uses the same OpenAI-style
+# request/response shape as before, so almost nothing else had to change.
+#
+# Get a free key at https://console.groq.com/keys, then add it to .env as:
+#   GROQ_API_KEY=your_key_here
 
-LLM_URL = "http://10.41.4.200:4000/v1/chat/completions"
-LLM_API_KEY = "sk-ZV5gXGf-kd8r9wvUcHgNqw"
-LLM_MODEL = "qwen/qwen3.6-27b"
+LLM_URL = "https://api.groq.com/openai/v1/chat/completions"
+LLM_API_KEY = os.environ.get("GROQ_API_KEY")
+LLM_MODEL = "openai/gpt-oss-120b"
 
 
 def call_llm(messages, temperature=0.0):
@@ -49,6 +55,12 @@ def call_llm(messages, temperature=0.0):
     temperature=0.0 keeps answers consistent/predictable, which matters
     a lot for SQL generation - you don't want a "creative" query.
     """
+    if not LLM_API_KEY:
+        raise ValueError(
+            "GROQ_API_KEY is not set. Add GROQ_API_KEY=your_key_here to your "
+            ".env file - get a free key at https://console.groq.com/keys"
+        )
+
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {LLM_API_KEY}",
@@ -63,8 +75,8 @@ def call_llm(messages, temperature=0.0):
     response.raise_for_status()  # throws an error if the server returned a failure
     data = response.json()
 
-    # This is the standard OpenAI-style response shape, which this
-    # endpoint follows (it's why the curl command looks like OpenAI's API).
+    # This is the standard OpenAI-style response shape, which Groq follows
+    # too - that's exactly why this endpoint swap needed so few changes.
     return data["choices"][0]["message"]["content"]
 
 

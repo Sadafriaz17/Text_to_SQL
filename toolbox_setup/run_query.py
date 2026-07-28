@@ -15,6 +15,7 @@ Leave that terminal open while you run this script.
 """
 
 import asyncio
+import json
 from toolbox_core import ToolboxClient
 
 TOOLBOX_URL = "http://127.0.0.1:5000"
@@ -57,7 +58,7 @@ async def run_sql(sql_query):
         async with ToolboxClient(TOOLBOX_URL) as toolbox:
             execute_sql_tool = await toolbox.load_tool("execute_sql")
             result = await execute_sql_tool(sql=sql_query)
-            return {"success": True, "rows": result}
+            return {"success": True, "rows": _normalize_rows(result)}
 
     except Exception as error:
         # Common causes here: bad table/column name in the generated SQL,
@@ -68,6 +69,28 @@ async def run_sql(sql_query):
             "error": f"Query failed: {error}",
             "attempted_sql": sql_query,
         }
+
+
+def _normalize_rows(result):
+    """
+    execute_sql_tool() can return rows already as a Python list of dicts,
+    OR as a JSON-encoded string, depending on the Toolbox version/tool
+    config. The frontend always needs a real list (it calls .map() on
+    it), so this makes sure that's what it gets no matter which shape
+    Toolbox handed back - avoiding a confusing "rows.map is not a
+    function" crash in the browser that looks like a network error but
+    isn't.
+    """
+    if isinstance(result, str):
+        try:
+            return json.loads(result)
+        except json.JSONDecodeError:
+            # Not JSON at all - wrap it so the frontend still gets a list
+            return [{"result": result}]
+    if isinstance(result, list):
+        return result
+    # Anything else unexpected - wrap defensively rather than crash later
+    return [result]
 
 
 # ---------------------------------------------------------------------------

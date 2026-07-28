@@ -722,22 +722,50 @@
 
       const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+      // Step 1: talk to the server. Only THIS step's failures mean
+      // "server unreachable" - anything after this is a different kind
+      // of bug and must never be reported as a network problem.
+      let data;
       try {
-        const res  = await fetch(`${API_BASE}/query`, {
+        const res = await fetch(`${API_BASE}/query`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ question }),
         });
-        const data = await res.json();
-        renderResult(data, timestamp);
+
+        if (!res.ok) {
+          // Server responded, but with an HTTP error status (4xx/5xx).
+          const text = await res.text().catch(() => '');
+          throw new Error(`Server returned ${res.status} ${res.statusText}. ${text}`);
+        }
+
+        data = await res.json();
       } catch (err) {
+        console.error('Fetch to /query failed:', err);
+        loading.classList.remove('visible');
+        btn.disabled = false;
+        input.focus();
         renderResult({
           success: false,
           question,
           tables: [],
           sql: '',
-          error: `Could not reach the API server at ${API_BASE}. Make sure uvicorn is running.`,
+          error: `Could not reach the API server at ${API_BASE}, or it returned an error. Details: ${err.message}`,
         }, timestamp);
+        return;
+      }
+
+      // Step 2: render what we got back. If THIS throws, it's a
+      // frontend rendering bug, not a server/network problem - say so.
+      try {
+        renderResult(data, timestamp);
+      } catch (err) {
+        console.error('renderResult failed on data:', data, err);
+        alert(
+          'The server responded successfully, but the page failed to display the result.\n\n' +
+          'Error: ' + err.message + '\n\n' +
+          'Open the browser console (F12) for full details - this is a frontend bug, not a connection problem.'
+        );
       } finally {
         loading.classList.remove('visible');
         btn.disabled = false;
@@ -817,7 +845,7 @@
         `;
         card.appendChild(errSection);
       } else {
-        const rows = data.rows || [];
+        const rows = Array.isArray(data.rows) ? data.rows : [];
         const resultSection = document.createElement('div');
         resultSection.className = 'card-section';
 
@@ -863,7 +891,7 @@
     // Helpers
     // ─────────────────────────────────────────────────────────────────
     function escapeHtml(str) {
-      return str
+      return String(str ?? '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
@@ -872,7 +900,7 @@
     }
 
     function getColumns(rows) {
-      if (!rows || rows.length === 0) return [];
+      if (!Array.isArray(rows) || rows.length === 0) return [];
       // Rows may be arrays or objects depending on the Toolbox response
       const first = rows[0];
       if (Array.isArray(first)) {
