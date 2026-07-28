@@ -25,6 +25,13 @@ import requests
 # ---------------------------------------------------------------------------
 # 1. Connect to the hosted LLM
 # ---------------------------------------------------------------------------
+#
+# NOTE: Gemini was tried here but the current Google account has a free-tier
+# quota of 0 (RESOURCE_EXHAUSTED / limit: 0), most likely a regional
+# restriction. That's an account/billing issue, not a code issue - see the
+# commented-out Gemini version below to switch back once billing is fixed.
+# For now, reverted to the original working hosted endpoint so the demo
+# isn't blocked.
 
 LLM_URL = "http://10.41.4.200:4000/v1/chat/completions"
 LLM_API_KEY = "sk-ZV5gXGf-kd8r9wvUcHgNqw"
@@ -59,6 +66,37 @@ def call_llm(messages, temperature=0.0):
     # This is the standard OpenAI-style response shape, which this
     # endpoint follows (it's why the curl command looks like OpenAI's API).
     return data["choices"][0]["message"]["content"]
+
+
+# ---------------------------------------------------------------------------
+# 1b. GEMINI VERSION (kept for later - currently blocked by account quota)
+# ---------------------------------------------------------------------------
+#
+# import os
+# from dotenv import load_dotenv
+#
+# load_dotenv()
+#
+# GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+# GEMINI_MODEL = "gemini-2.0-flash"
+# GEMINI_URL = (
+#     f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+# )
+#
+# def call_llm(messages, temperature=0.0):
+#     prompt_text = "\n\n".join(m["content"] for m in messages)
+#     payload = {
+#         "contents": [{"parts": [{"text": prompt_text}]}],
+#         "generationConfig": {"temperature": temperature},
+#     }
+#     params = {"key": GEMINI_API_KEY}
+#     response = requests.post(GEMINI_URL, params=params, json=payload, timeout=60)
+#     response.raise_for_status()
+#     data = response.json()
+#     try:
+#         return data["candidates"][0]["content"]["parts"][0]["text"]
+#     except (KeyError, IndexError) as e:
+#         raise ValueError(f"Unexpected Gemini response shape: {data!r}") from e
 
 
 # ---------------------------------------------------------------------------
