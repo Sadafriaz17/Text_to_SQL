@@ -231,6 +231,7 @@ Rules:
 - Use Microsoft SQL Server / T-SQL syntax specifically.
 - To limit the number of rows, use "SELECT TOP N ..." - never use LIMIT (that's SQLite/MySQL syntax and will fail in SQL Server).
 - Use square brackets around any table/column name that could clash with a reserved word, e.g. [Name].
+- Wrap any DECIMAL/NUMERIC/MONEY result column (e.g. UnitPrice, Total, or a SUM/AVG over them) in CAST(... AS FLOAT). The database driver mis-serializes raw DECIMAL values, so this must always be done for any such column that appears in the SELECT list.
 - Output ONLY the SQL query. No explanation, no markdown code fences, no comments.
 - Use only the tables and columns shown above.
 - End the query with a semicolon.
