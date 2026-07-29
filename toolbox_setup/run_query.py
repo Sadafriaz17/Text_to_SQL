@@ -83,13 +83,14 @@ def _normalize_rows(result):
     """
     if isinstance(result, str):
         try:
-            return json.loads(result)
+            result = json.loads(result)
         except json.JSONDecodeError:
             # Not JSON at all - wrap it so the frontend still gets a list
             return [{"result": result}]
     if isinstance(result, list):
         return result
-    # Anything else unexpected - wrap defensively rather than crash later
+    # A single row comes back as a lone dict (not a one-item list), same as
+    # any other unexpected type - wrap defensively rather than crash later.
     return [result]
 
 
