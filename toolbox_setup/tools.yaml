@@ -15,6 +15,14 @@ sources:
     user: ${DB_USER}       # your SQL Server login username
     password: ${DB_PASSWORD}
 
+# Requires a Google OAuth Client ID (GOOGLE_CLIENT_ID in .env) - see
+# toolbox_setup/run_query.py for how the Python client supplies a matching
+# Google ID token (minted from a service account, no end-user login involved).
+authServices:
+  toolbox-auth:
+    type: google
+    clientId: ${GOOGLE_CLIENT_ID}
+
 tools:
   list_tables:
     type: mssql-list-tables
@@ -23,6 +31,8 @@ tools:
       Lists all tables in the Chinook database along with their columns,
       data types, and relationships. Use this first to understand the schema
       before writing any SQL query.
+    authRequired:
+      - toolbox-auth
 
   execute_sql:
     type: mssql-execute-sql
@@ -31,6 +41,8 @@ tools:
       Executes a single SQL (T-SQL) statement against the Chinook database
       and returns the results. Only use SELECT statements generated for
       answering user questions - do not run statements that modify data.
+    authRequired:
+      - toolbox-auth
 
 toolsets:
   chinook_tools:

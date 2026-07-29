@@ -16,10 +16,52 @@ Leave that terminal open while you run this script.
 
 import asyncio
 import json
+import os
+
+from dotenv import load_dotenv
+from google.auth.transport.requests import Request as GoogleAuthRequest
+from google.oauth2 import service_account
 from toolbox_core import ToolboxClient
+
+load_dotenv()
 
 TOOLBOX_URL = "http://127.0.0.1:5000"
 TOOLSET_NAME = "chinook_tools"
+
+# ---------------------------------------------------------------------------
+# Auth: mint a Google ID token for the Toolbox's "toolbox-auth" authService
+# (see tools.yaml). This is a service-account token, not a human login - it
+# proves the *backend* is a trusted caller, matching the GOOGLE_CLIENT_ID
+# configured as that authService's clientId.
+# ---------------------------------------------------------------------------
+
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+_KEY_FILE_NAME = os.environ.get("GOOGLE_SERVICE_ACCOUNT_KEY_FILE")
+GOOGLE_SERVICE_ACCOUNT_KEY_PATH = (
+    os.path.join(os.path.dirname(__file__), _KEY_FILE_NAME) if _KEY_FILE_NAME else None
+)
+
+
+async def get_auth_token():
+    """
+    Returns a fresh Google-signed ID token whose audience matches
+    GOOGLE_CLIENT_ID. Called by the Toolbox SDK on every tool invocation -
+    minting a new one each time keeps it from ever going stale.
+    """
+    if not GOOGLE_CLIENT_ID or not GOOGLE_SERVICE_ACCOUNT_KEY_PATH:
+        raise ValueError(
+            "GOOGLE_CLIENT_ID and GOOGLE_SERVICE_ACCOUNT_KEY_FILE must be set in "
+            ".env - see toolbox_setup/tools.yaml's authServices for why this is required."
+        )
+
+    credentials = service_account.IDTokenCredentials.from_service_account_file(
+        GOOGLE_SERVICE_ACCOUNT_KEY_PATH, target_audience=GOOGLE_CLIENT_ID
+    )
+    credentials.refresh(GoogleAuthRequest())
+    return credentials.token
+
+
+AUTH_TOKEN_GETTERS = {"toolbox-auth": get_auth_token}
 
 
 # ---------------------------------------------------------------------------
@@ -33,7 +75,9 @@ async def get_schema():
     the real Chinook database in SSMS - no manual typing needed.
     """
     async with ToolboxClient(TOOLBOX_URL) as toolbox:
-        list_tables_tool = await toolbox.load_tool("list_tables")
+        list_tables_tool = await toolbox.load_tool(
+            "list_tables", auth_token_getters=AUTH_TOKEN_GETTERS
+        )
         schema = await list_tables_tool()
         return schema
 
@@ -56,7 +100,9 @@ async def run_sql(sql_query):
     """
     try:
         async with ToolboxClient(TOOLBOX_URL) as toolbox:
-            execute_sql_tool = await toolbox.load_tool("execute_sql")
+            execute_sql_tool = await toolbox.load_tool(
+                "execute_sql", auth_token_getters=AUTH_TOKEN_GETTERS
+            )
             result = await execute_sql_tool(sql=sql_query)
             return {"success": True, "rows": _normalize_rows(result)}
 

@@ -3,3 +3,4 @@ python-dotenv
 toolbox-core
 fastapi
 uvicorn[standard]
+google-auth
