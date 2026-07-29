@@ -676,6 +676,15 @@
     // ─────────────────────────────────────────────────────────────────
     const API_BASE = 'http://localhost:8000';
 
+    // ADDED: API key sent with every /query request. Must match
+    // SERVER_API_KEY in the backend's .env file exactly, or the
+    // server will reject the request with 401 Unauthorized.
+    // NOTE: this file is opened directly by the browser with no build
+    // step, so this key is visible in "view source" to anyone with
+    // access to the file. That's an accepted tradeoff for a local /
+    // small-team tool — don't reuse this key anywhere sensitive.
+    const API_KEY = 'PASTE-YOUR-SERVER_API_KEY-VALUE-HERE';
+
     // ADDED: keep track of Chart.js instances so we can destroy them
     // before redrawing (Chart.js throws if you reuse a canvas without
     // destroying the old chart first).
@@ -747,9 +756,23 @@
       try {
         const res = await fetch(`${API_BASE}/query`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            // ADDED: required by server.py's verify_api_key dependency.
+            'X-API-Key': API_KEY,
+          },
           body: JSON.stringify({ question }),
         });
+
+        // ADDED: handle auth failures with a specific message, before
+        // the generic !res.ok check below swallows it into a vaguer
+        // "server returned an error" message.
+        if (res.status === 401) {
+          throw new Error(
+            'Unauthorized — the API key is missing or incorrect. ' +
+            'Check that API_KEY in index.html matches SERVER_API_KEY in the server\'s .env file.'
+          );
+        }
 
         if (!res.ok) {
           // Server responded, but with an HTTP error status (4xx/5xx).
@@ -768,7 +791,9 @@
           question,
           tables: [],
           sql: '',
-          error: `Could not reach the API server at ${API_BASE}, or it returned an error. Details: ${err.message}`,
+          error: err.message.startsWith('Unauthorized')
+            ? err.message
+            : `Could not reach the API server at ${API_BASE}, or it returned an error. Details: ${err.message}`,
         }, timestamp);
         return;
       }
