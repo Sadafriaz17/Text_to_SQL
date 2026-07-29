@@ -952,6 +952,11 @@
         '#6c63ff', '#00d9ff', '#ffd166', '#00e5a0',
         '#ff4d6d', '#a08bff', '#ff9f7f', '#ff79c6',
       ];
+      // Cycle the palette instead of indexing straight into it, so charts
+      // with more categories than colors (e.g. "sales by genre", ~25 bars)
+      // still get a distinct-looking color per bar/slice instead of
+      // Chart.js falling back to `undefined` past the 8th one.
+      const chartColors = chart.values.map((_, i) => colorPalette[i % colorPalette.length]);
 
       chartInstances[canvasId] = new Chart(canvas, {
         type: chart.type, // "bar" | "line" | "pie"
@@ -960,8 +965,8 @@
           datasets: [{
             label: chart.y,
             data: chart.values,
-            backgroundColor: colorPalette,
-            borderColor: chart.type === 'line' ? '#00d9ff' : colorPalette,
+            backgroundColor: chartColors,
+            borderColor: chart.type === 'line' ? '#00d9ff' : chartColors,
             borderWidth: chart.type === 'line' ? 2 : 1,
             tension: 0.3, // smooths line charts a bit
           }],
