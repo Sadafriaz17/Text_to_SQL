@@ -8,12 +8,13 @@ It exposes exactly the two endpoints the frontend already calls:
 
     GET  /health   -> lets the frontend show "Database connected" / "offline"
     POST /query    -> { "question": "..." } goes in,
-                       { success, question, tables, sql, rows, error } comes out
+                       { success, question, tables, sql, rows, chart, error } comes out
 
 Under the hood it reuses the exact same functions main.py uses:
     relevant_tables()  -> Step 2 (llm_logic/llm_sql_logic.py)
     generate_sql()      -> Step 3 (llm_logic/llm_sql_logic.py)
     run_sql()           -> Step 4 (toolbox_setup/run_query.py)
+    suggest_chart()     -> decides if/how to chart the result (chart_logic/chart_logic.py)
 
 How to run it:
     1. Make sure the Toolbox server is running in its own terminal:
@@ -31,6 +32,7 @@ from pydantic import BaseModel
 
 from llm_logic.llm_sql_logic import relevant_tables, generate_sql
 from toolbox_setup.run_query import get_schema, run_sql
+from chart_logic.chart_logic import suggest_chart
 
 app = FastAPI(title="Chinook Text-to-SQL API")
 
@@ -70,7 +72,7 @@ async def health():
 async def query(payload: QuestionRequest):
     """
     Runs one question through the full pipeline:
-        question -> relevant_tables() -> generate_sql() -> run_sql()
+        question -> relevant_tables() -> generate_sql() -> run_sql() -> suggest_chart()
 
     Always returns 200 OK with a JSON body the frontend already knows
     how to render - success/failure is communicated via the "success"
@@ -125,12 +127,16 @@ async def query(payload: QuestionRequest):
     result = await run_sql(sql)
 
     if result["success"]:
+        # Step 5: decide if/how this result can be shown as a chart
+        chart_info = suggest_chart(result["rows"])
+
         return {
             "success": True,
             "question": question,
             "tables": tables,
             "sql": sql,
             "rows": result["rows"],
+            "chart": chart_info,
         }
 
     return {

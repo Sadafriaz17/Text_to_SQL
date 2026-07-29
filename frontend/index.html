@@ -8,6 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <!-- ADDED: Chart.js library for dynamic graphing -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 
   <style>
     /* ─── Design Tokens ─────────────────────────────────────────────── */
@@ -551,6 +553,17 @@
     .empty-state h3 { font-size: 1rem; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary); }
     .empty-state p  { font-size: 0.85rem; }
 
+    /* ADDED: Chart container styling */
+    .chart-wrap {
+      position: relative;
+      height: 320px;
+      width: 100%;
+      background: #0d0d1a;
+      border: 1px solid rgba(0,217,255,0.12);
+      border-radius: var(--radius-md);
+      padding: 16px;
+    }
+
     /* ─── Footer ────────────────────────────────────────────────────── */
     footer {
       padding: 24px 40px;
@@ -662,6 +675,11 @@
     // Config
     // ─────────────────────────────────────────────────────────────────
     const API_BASE = 'http://localhost:8000';
+
+    // ADDED: keep track of Chart.js instances so we can destroy them
+    // before redrawing (Chart.js throws if you reuse a canvas without
+    // destroying the old chart first).
+    const chartInstances = {};
 
     // ─────────────────────────────────────────────────────────────────
     // Health check on load
@@ -881,10 +899,94 @@
           `;
         }
         card.appendChild(resultSection);
+
+        // ADDED: Chart section — only shown when the backend decided
+        // this result is chart-worthy (data.chart.type is not null).
+        if (data.chart && data.chart.type) {
+          const chartSection = document.createElement('div');
+          chartSection.className = 'card-section';
+          const canvasId = 'chart-' + Date.now();
+          chartSection.innerHTML = `
+            <div class="section-label">
+              <div class="section-label-dot" style="background:#ffd166"></div>
+              Chart
+            </div>
+            <div class="chart-wrap">
+              <canvas id="${canvasId}"></canvas>
+            </div>
+          `;
+          card.appendChild(chartSection);
+
+          // The canvas must exist in the DOM before Chart.js can draw
+          // on it, so we append the card first, then draw the chart
+          // right after (see bottom of this function).
+          card.dataset.pendingChartId = canvasId;
+        }
       }
 
       // Prepend newest at top
       container.insertBefore(card, container.firstChild);
+
+      // ADDED: draw the chart now that the canvas is actually in the DOM
+      if (data.success && data.chart && data.chart.type && card.dataset.pendingChartId) {
+        drawChart(card.dataset.pendingChartId, data.chart);
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // ADDED: Draw a chart using Chart.js, given the backend's suggestion
+    // ─────────────────────────────────────────────────────────────────
+    function drawChart(canvasId, chart) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+
+      // If a chart was already drawn on this canvas id (shouldn't
+      // normally happen since ids are unique per card), destroy it
+      // first — Chart.js throws an error if you draw twice on the
+      // same canvas without cleaning up.
+      if (chartInstances[canvasId]) {
+        chartInstances[canvasId].destroy();
+      }
+
+      const colorPalette = [
+        '#6c63ff', '#00d9ff', '#ffd166', '#00e5a0',
+        '#ff4d6d', '#a08bff', '#ff9f7f', '#ff79c6',
+      ];
+
+      chartInstances[canvasId] = new Chart(canvas, {
+        type: chart.type, // "bar" | "line" | "pie"
+        data: {
+          labels: chart.labels,
+          datasets: [{
+            label: chart.y,
+            data: chart.values,
+            backgroundColor: colorPalette,
+            borderColor: chart.type === 'line' ? '#00d9ff' : colorPalette,
+            borderWidth: chart.type === 'line' ? 2 : 1,
+            tension: 0.3, // smooths line charts a bit
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: chart.type === 'pie',
+              labels: { color: '#8884a8' },
+            },
+          },
+          scales: chart.type === 'pie' ? {} : {
+            x: {
+              ticks: { color: '#8884a8' },
+              grid: { color: 'rgba(108,99,255,0.08)' },
+            },
+            y: {
+              ticks: { color: '#8884a8' },
+              grid: { color: 'rgba(108,99,255,0.08)' },
+            },
+          },
+        },
+      });
     }
 
     // ─────────────────────────────────────────────────────────────────
